@@ -1,5 +1,9 @@
 # Add-on per Home Assistant
 
+> **Avvertenza — solo per uso privato.** Questo software è pubblicato così com'è, per uso personale. Non c'è nessuna garanzia, esplicita o implicita, di funzionamento, prestazioni o idoneità a uno scopo; chi lo usa lo fa a proprio rischio. In particolare FakeNUT può spegnere dispositivi: provalo prima di affidargli qualcosa di importante. Vedi la [licenza MIT](https://github.com/samusamu81/ha-addons/blob/main/LICENSE).
+>
+> *Disclaimer — for private use only. Provided "as is", without any express or implied warranty of operation, performance or fitness for a particular purpose. Use at your own risk.*
+
 Due add-on indipendenti per gestire NAS e server di casa da Home Assistant. Si possono installare uno o tutti e due.
 
 | Add-on | A cosa serve | Per chi |
