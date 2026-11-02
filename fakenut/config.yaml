@@ -1,12 +1,12 @@
-name: NUT casa
-version: "2.4.2"
-slug: nut_casa
-url: https://github.com/samusamu81/nut-casa
+name: FakeNUT
+version: "3.0.0"
+slug: fakenut
+url: https://github.com/samusamu81/ha-addons/tree/main/fakenut
 description: >-
-  Un interruttore in Home Assistant per ogni NAS: stato col ping, spegnimento
-  con l'UPS finto "qnapups" (file /share/nut/<nome>.sol), accensione col
-  Wake-on-LAN; eventi dei NAS via syslog (porta 1514). Facoltativo: l'UPS
-  vero in USB sulla porta 3494.
+  Finto server NUT che risponde a ogni client in base al suo IP: un
+  interruttore in Home Assistant per ogni dispositivo (QNAP, Synology o
+  qualsiasi client NUT) per spegnerlo in modo pulito e riaccenderlo col
+  Wake-on-LAN.
 arch:
   - aarch64
   - amd64
@@ -14,12 +14,10 @@ init: false
 startup: services
 boot: auto
 # Rete dell'host: il server NUT deve vedere il vero IP di chi chiede, e il
-# Wake-on-LAN deve uscire in broadcast sulla rete dei NAS.
+# Wake-on-LAN deve uscire in broadcast sulla rete dei dispositivi.
 host_network: true
 services:
   - mqtt:need
-# Per scrivere gli eventi syslog nel Registro di HA (logbook.log).
-homeassistant_api: true
 map:
   - share:rw
 usb: true
@@ -29,10 +27,10 @@ options:
     - name: nas1
       ip: 192.168.1.10
       mac: ""
+      type: qnap
   broadcast: 192.168.1.255
   ping_interval: 10
   lock_minutes: 5
-  syslog_days: 90
   real_ups: false
   real_ups_driver: usbhid-ups
   real_ups_port: auto
@@ -40,11 +38,13 @@ schema:
   devices:
     - name: match(^[a-z0-9_]+$)
       ip: match(^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$)
-      mac: match(^$|^([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}$)
+      mac: match(^$|^([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}$)?
+      type: list(qnap|synology|custom)
+      user: str?
+      password: password?
   broadcast: str
   ping_interval: int(5,300)
   lock_minutes: int(1,30)
-  syslog_days: int(1,365)
   real_ups: bool
   real_ups_driver: str
   real_ups_port: str

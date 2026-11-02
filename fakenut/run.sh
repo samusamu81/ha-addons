@@ -1,9 +1,9 @@
 #!/bin/sh
-# NUT casa: avvio.
-# - nut_casa.py: server NUT sulla porta 3493 (UPS finto "qnapups", risposta per IP
-#   dai file /share/nut/<nome>.sol) e un interruttore MQTT per ogni NAS.
+# FakeNUT: avvio.
+# - fakenut.py: server NUT sulla porta 3493 (qualsiasi nome di UPS, risposta per IP
+#   dai file /share/fakenut/<nome>.sol) e un interruttore MQTT per ogni dispositivo.
 # - "ups-vero": l'UPS in USB, solo se real_ups e' attivo. upsd standard sulla
-#   porta 3494, solo come sensore per HA: i NAS non lo vedono.
+#   porta 3494, solo come sensore per HA: i client di FakeNUT non lo vedono.
 set -e
 
 OPTS=/data/options.json
@@ -26,10 +26,10 @@ EOF
   chmod 0640 /etc/nut/ups.conf /etc/nut/upsd.conf /etc/nut/upsd.users
   if upsdrvctl -u root start ups-vero; then
     upsd -u root
-    echo "[nut_casa] UPS vero su porta 3494"
+    echo "[fakenut] UPS vero su porta 3494"
   else
-    echo "[nut_casa] ATTENZIONE: UPS vero non avviato, controllare driver e cavo"
+    echo "[fakenut] ATTENZIONE: UPS vero non avviato, controllare driver e cavo"
   fi
 fi
 
-exec python3 -u /nut_casa.py
+exec python3 -u /fakenut.py

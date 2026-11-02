@@ -1,0 +1,34 @@
+name: QLog2HA
+version: "1.0.0"
+slug: qlog2ha
+url: https://github.com/samusamu81/ha-addons/tree/main/qlog2ha
+description: >-
+  Gli eventi dei NAS QNAP (syslog di QuLog Center) in Home Assistant: sensore
+  "Ultimo evento" ed entità evento per ogni NAS, righe nel Registro e storico
+  su file.
+arch:
+  - aarch64
+  - amd64
+init: false
+startup: services
+boot: auto
+# Rete dell'host: serve il vero IP di chi manda il syslog, per riconoscere i NAS.
+host_network: true
+services:
+  - mqtt:need
+# Per scrivere gli eventi nel Registro di HA (logbook.log).
+homeassistant_api: true
+map:
+  - share:rw
+options:
+  devices:
+    - name: nas1
+      ip: 192.168.1.10
+  port: 1514
+  days: 90
+schema:
+  devices:
+    - name: match(^[a-z0-9_]+$)
+      ip: match(^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$)
+  port: port
+  days: int(1,365)

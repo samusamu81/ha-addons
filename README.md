@@ -1,15 +1,27 @@
-# NUT casa — add-on per Home Assistant
+# Add-on per Home Assistant
 
-Accendere e spegnere i NAS QNAP da Home Assistant, con un interruttore per NAS, e ricevere i loro eventi via syslog.
+Due add-on indipendenti per gestire NAS e server di casa da Home Assistant. Si possono installare uno o tutti e due.
 
-- Spegnimento pulito tramite un **UPS finto** (protocollo NUT) che risponde a ogni NAS in base al suo IP.
-- Accensione con **Wake-on-LAN**, stato con il **ping**.
-- Eventi di QTS (syslog) come sensori ed eventi in HA, più uno storico su file.
+| Add-on | A cosa serve | Per chi |
+|---|---|---|
+| [**FakeNUT**](fakenut/DOCS.md) | Finto server NUT che risponde a ogni client in base al suo IP: un interruttore per dispositivo, per spegnerlo in modo pulito e riaccenderlo col Wake-on-LAN | qualsiasi client NUT: QNAP, Synology, TrueNAS, Unraid, Proxmox, Linux… |
+| [**QLog2HA**](qlog2ha/DOCS.md) | Gli eventi dei NAS QNAP (syslog di QuLog Center) come sensori, eventi per le automazioni, Registro e storico | chi ha un QNAP |
 
-*Turn QNAP NAS units on and off from Home Assistant: a fake NUT UPS answering per client IP, Wake-on-LAN, and QTS syslog events as MQTT entities. Documentation in Italian.*
+Se usi tutti e due con **gli stessi nomi**, in Home Assistant le entità di ogni NAS stanno sotto un solo dispositivo.
+
+*Two independent Home Assistant add-ons: **FakeNUT**, a fake NUT server answering each client by IP (one switch per device: clean shutdown, Wake-on-LAN, ping status); **QLog2HA**, QNAP syslog events as MQTT entities. Documentation in Italian.*
 
 ## Installazione
-1. *Impostazioni → Componenti aggiuntivi → Negozio → ⋮ → Repository*: aggiungere `https://github.com/samusamu81/nut-casa`.
-2. Installare **NUT casa**, compilare l'elenco dei NAS nella scheda *Configurazione*, avviare.
+1. In Home Assistant: *Impostazioni → Componenti aggiuntivi → Negozio dei componenti aggiuntivi → ⋮ → Repository*.
+2. Aggiungi `https://github.com/samusamu81/ha-addons`.
+3. Installa FakeNUT e/o QLog2HA, compila la scheda *Configurazione* e avvia.
 
-Documentazione completa: [nut_casa/DOCS.md](nut_casa/DOCS.md). Licenza [MIT](LICENSE).
+L'immagine viene costruita sul tuo Home Assistant al momento dell'installazione (un paio di minuti).
+
+## Requisiti
+- Home Assistant OS o Supervised (servono gli add-on).
+- Add-on **Mosquitto broker** e integrazione **MQTT**.
+- Architetture: `aarch64` (Raspberry Pi 4/5 e simili) e `amd64` (PC, macchine virtuali). Provati su Raspberry Pi 5 con QNAP QTS 5.2.
+
+## Licenza
+[MIT](LICENSE).
