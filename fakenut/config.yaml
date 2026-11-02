@@ -1,5 +1,5 @@
 name: FakeNUT
-version: "3.0.1"
+version: "3.1.0"
 slug: fakenut
 url: https://github.com/samusamu81/ha-addons/tree/main/fakenut
 description: >-
@@ -32,6 +32,7 @@ options:
   broadcast: 192.168.1.255
   ping_interval: 10
   lock_minutes: 5
+  force_shutdown: false
   real_ups: false
   real_ups_driver: usbhid-ups
   real_ups_port: auto
@@ -46,6 +47,7 @@ schema:
   broadcast: str
   ping_interval: int(5,300)
   lock_minutes: int(1,30)
+  force_shutdown: bool?
   real_ups: bool
   real_ups_driver: str
   real_ups_port: str

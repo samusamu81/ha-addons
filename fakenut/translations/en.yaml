@@ -11,6 +11,9 @@ configuration:
   lock_minutes:
     name: Lock time
     description: Maximum minutes the switch ignores new commands after ON or OFF, waiting for the ping to confirm.
+  force_shutdown:
+    name: Force shutdown
+    description: "If on, a device switched off from HA and then powered on by hand shuts down again: the .sol file stays until the switch goes ON. If off (default), the file is deleted as soon as the device is off (with the real UPS, only while it is online)."
   real_ups:
     name: Real UPS on USB
     description: Starts a standard NUT server on port 3494 for a UPS connected via USB (for HA's NUT integration only).

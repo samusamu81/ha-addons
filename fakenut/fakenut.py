@@ -22,7 +22,7 @@ import urllib.request
 
 import paho.mqtt.client as mqtt
 
-VERSION = "3.0.1"
+VERSION = "3.1.0"
 OPTIONS_FILE = os.environ.get("FAKENUT_OPTIONS", "/data/options.json")
 SOL_DIR = os.environ.get("FAKENUT_SOL_DIR", "/share/fakenut")
 DEVICES_FILE = os.environ.get("FAKENUT_DEVICES", "/data/devices.json")
@@ -39,6 +39,9 @@ TYPES = {
 OPTS = json.load(open(OPTIONS_FILE))
 DEBUG = bool(OPTS.get("debug", False))
 LOCK = int(OPTS.get("lock_minutes", 5)) * 60
+# true: il .sol resta finche' non arriva un ON, quindi chi si riaccende a mano si
+# rispegne. false: il .sol si cancella appena il ping dice "spento".
+FORCE_SHUTDOWN = bool(OPTS.get("force_shutdown", False))
 STATE = threading.Lock()  # ping e MQTT girano in thread diversi
 
 
@@ -488,6 +491,32 @@ def ping(ip):
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
+def real_ups_on_mains():
+    """True se l'UPS vero non c'e' o e' in rete. Se e' a batteria o non risponde: False."""
+    if not OPTS.get("real_ups"):
+        return True
+    try:
+        with socket.create_connection(("127.0.0.1", 3494), timeout=3) as s:
+            s.sendall(b"GET VAR ups-vero ups.status\n")
+            reply = s.recv(256).decode(errors="replace")
+    except OSError:
+        return False
+    status = reply.split('"')[1].split() if reply.startswith("VAR") and '"' in reply else []
+    return "OL" in status and "OB" not in status
+
+
+def clear_sol_if_off(host):
+    """Senza force_shutdown: a dispositivo spento il .sol non serve piu', e se restasse
+    farebbe rispegnere chi lo riaccende a mano. Non con l'UPS vero a batteria."""
+    if FORCE_SHUTDOWN or host.online is not False or not host.stop_requested():
+        return False
+    if not real_ups_on_mains():
+        return False
+    os.remove(host.sol)
+    log(f"{host.name}: spento, cancellato {host.sol} (si puo' riaccendere anche a mano)")
+    return True
+
+
 def ping_loop():
     interval = int(OPTS.get("ping_interval", 10))
     while True:
@@ -505,7 +534,7 @@ def ping_loop():
                     host.online = new
                     log(f"{host.name} ({host.ip}): {'acceso' if new else 'spento'}")
                 busy = host.pending is not None
-                if host.update_pending() or changed or busy:
+                if host.update_pending() | clear_sol_if_off(host) or changed or busy:
                     publish_state(host)
         time.sleep(interval)
 
@@ -523,6 +552,8 @@ async def main():
     threading.Thread(target=ping_loop, daemon=True).start()
     server = await asyncio.start_server(nut_client, "0.0.0.0", NUT_PORT)
     log(f"server NUT sulla porta {NUT_PORT}: qualsiasi nome di UPS, risposta in base all'IP")
+    log("force_shutdown attivo: il .sol resta fino all'ON" if FORCE_SHUTDOWN
+        else "il .sol si cancella appena il dispositivo e' spento (force_shutdown spento)")
     async with server:
         await server.serve_forever()
 

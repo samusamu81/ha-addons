@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.0
+- 🇮🇹 Nuova opzione `force_shutdown` (predefinita `false`): il file `.sol` si cancella appena il dispositivo risulta spento, così riaccenderlo a mano non lo fa rispegnere. Con l'UPS vero il file resta finché l'UPS è a batteria. Con `true`, comportamento di prima: il file resta fino all'ON.
+- 🇬🇧 New option `force_shutdown` (default `false`): the `.sol` file is deleted as soon as the device is off, so powering it on by hand does not shut it down again. With the real UPS the file stays while the UPS is on battery. With `true`, previous behavior: the file stays until ON.
+
 ## 3.0.1
 - 🇮🇹 Nuovo logo. Documentazione e opzioni anche in inglese.
 - 🇬🇧 New logo. Documentation and options also in English.

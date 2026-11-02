@@ -49,6 +49,7 @@ devices:
 broadcast: 192.168.1.255       # broadcast della rete dei dispositivi (Wake-on-LAN)
 ping_interval: 10              # secondi tra un ping e l'altro
 lock_minutes: 5                # durata massima del blocco dopo un comando
+force_shutdown: false          # true = chi si riaccende a mano si rispegne (vedi sotto)
 real_ups: false                # UPS vero collegato in USB (vedi sotto)
 ```
 
@@ -62,6 +63,7 @@ real_ups: false                # UPS vero collegato in USB (vedi sotto)
 | `broadcast` | indirizzo di broadcast della rete dei dispositivi |
 | `ping_interval` | ogni quanto controllare se sono accesi |
 | `lock_minutes` | dopo un comando, per quanto al massimo l'interruttore resta bloccato |
+| `force_shutdown` | cosa succede se riaccendi a mano un dispositivo spento da FakeNUT (sezione sotto). Predefinito `false` |
 | `debug` | (facoltativo) scrive nel registro ogni domanda NUT, con l'IP |
 
 ### Tipi di client
@@ -91,9 +93,32 @@ Attributi dell'interruttore: `ip`, `mac`, `tipo`, `spegnimento_richiesto` (c'è 
 ## Come si comporta
 - **Stato:** "spento" solo dopo 3 ping falliti di fila. Dopo un OFF l'interruttore resta su **on** finché il dispositivo risponde ancora (di solito 2–3 minuti): è normale.
 - **Blocco dei comandi:** dopo un **ON** l'interruttore ignora altri comandi finché il ping non conferma. Dopo un **OFF**, nel **primo minuto** un ON lo annulla ancora; poi resta bloccato. Il blocco dura al massimo `lock_minutes`.
-- **Il file `.sol` resta** anche se l'add-on o Home Assistant si riavviano. Attenzione: un dispositivo che si riaccende da solo (per esempio al ritorno della corrente) con il suo `.sol` presente **si rispegne**. Si riaccende con l'interruttore.
+- **Il file `.sol`** sopravvive ai riavvii dell'add-on e di Home Assistant. Quando viene cancellato lo decide `force_shutdown` (sezione sotto).
 - **Chi non è nell'elenco** e chiede `qnapups` o `ups` legge sempre "in rete".
 - **Nessun comando accettato:** `SET`, `INSTCMD`, `FSD` rispondono `ACCESS-DENIED`. FakeNUT non spegne niente di sua iniziativa: dice solo "a batteria" a chi deve spegnersi.
+
+## Riaccensione a mano e `force_shutdown`
+Dopo un OFF, FakeNUT risponde "a batteria" finché esiste il file `<nome>.sol`. Se in quel momento il dispositivo si riaccende senza passare dall'interruttore (pulsante, WOL da un'altra app, ripristino dell'alimentazione), legge "a batteria" e **si rispegne**. `force_shutdown` sceglie se è quello che vuoi.
+
+| | `force_shutdown: false` (predefinito) | `force_shutdown: true` |
+|---|---|---|
+| Quando si cancella il `.sol` | appena il ping conferma che è **spento** (3 ping falliti) | solo con un **ON** dall'interruttore |
+| Lo riaccendi col pulsante | resta acceso; l'interruttore torna su ON da solo | **si rispegne** dopo il ritardo impostato sul dispositivo |
+| Per riaccenderlo da HA | interruttore su ON (manda il WOL) | interruttore su ON (cancella il `.sol` e manda il WOL) |
+| Adatto a | uso normale: spegni da HA, riaccendi come vuoi | dispositivi che devono restare spenti finché lo decide Home Assistant |
+
+**Con l'UPS vero** (`real_ups: true`) il `.sol` si cancella solo se l'UPS è **in rete** (`OL`). Se è **a batteria**, o se non risponde, il file resta anche con `force_shutdown: false`: durante un blackout il dispositivo è ancora alimentato dalla batteria, e un'accensione lo farebbe ripartire. Il file si cancella da solo quando l'UPS torna in rete.
+
+Un dispositivo spento **non** si riaccende perché il file è stato cancellato: un dispositivo spento non interroga FakeNUT. Lo riaccendono solo il WOL, il pulsante, o il ripristino dell'alimentazione quando la corrente al suo ingresso manca e poi torna.
+
+### Blackout con UPS vero: confronto con un NUT normale
+Con un server NUT normale, dopo lo spegnimento dei client il server manda all'UPS il comando "togli corrente" (*killpower*): l'UPS spegne le prese e le riaccende al ritorno della rete, così i dispositivi con il ripristino dell'alimentazione ripartono. Senza quel comando, se la corrente torna prima che la batteria finisca, i dispositivi restano spenti.
+
+FakeNUT non usa *killpower*: per riaccendere usa il **Wake-on-LAN**. Un'automazione tipica:
+- UPS vero **a batteria da 3 minuti** → `switch.turn_off` sugli interruttori;
+- UPS vero **in rete da 5 minuti** → `switch.turn_on` sugli interruttori dei dispositivi spenti.
+
+Se invece la batteria finisce, al ritorno della corrente i dispositivi con il ripristino dell'alimentazione ripartono da soli; il loro `.sol` è già stato cancellato (UPS in rete), quindi restano accesi.
 
 ## UPS vero (facoltativo)
 Con un UPS collegato in USB al dispositivo di Home Assistant: `real_ups: true`, `real_ups_driver` (di solito `usbhid-ups`) e `real_ups_port` (`auto`). Parte un server NUT standard sulla porta **3494**, da aggiungere in HA con l'integrazione **Network UPS Tools**. I client di FakeNUT non lo vedono: per spegnerli in un blackout serve un'automazione, per esempio "a batteria da 3 minuti → spegni gli interruttori".
@@ -123,7 +148,7 @@ Se un client è in un'altra VLAN, il firewall deve permettergli la 3493 verso Ho
 |---|---|
 | Il dispositivo non si spegne | il client NUT non è attivo, o punta a un altro IP; prova con `debug: true` e guarda il registro |
 | Non si riaccende | Wake-on-LAN spento sul dispositivo, MAC sbagliato, broadcast di un'altra rete, porte aggregate (LAG) |
-| Si rispegne appena acceso | c'è ancora il suo `.sol`: interruttore su ON |
+| Si rispegne appena acceso | c'è ancora il suo `.sol`: con `force_shutdown: true` è voluto (interruttore su ON); con `false`, l'UPS vero è a batteria o non risponde |
 | Login rifiutato nel registro | client `custom` con utente o password diversi dall'elenco |
 
 ---
@@ -177,6 +202,7 @@ devices:
 broadcast: 192.168.1.255       # broadcast address of the devices' network (Wake-on-LAN)
 ping_interval: 10              # seconds between pings
 lock_minutes: 5                # maximum lock time after a command
+force_shutdown: false          # true = a device powered on by hand shuts down again (see below)
 real_ups: false                # real UPS on USB (see below)
 ```
 
@@ -190,6 +216,7 @@ real_ups: false                # real UPS on USB (see below)
 | `broadcast` | broadcast address of the devices' network |
 | `ping_interval` | how often to check whether devices are on |
 | `lock_minutes` | after a command, the longest time the switch stays locked |
+| `force_shutdown` | what happens if you power on by hand a device FakeNUT shut down (section below). Default `false` |
 | `debug` | (optional) logs every NUT request, with the IP |
 
 ### Client types
@@ -219,9 +246,32 @@ Switch attributes: `ip`, `mac`, `tipo` (type), `spegnimento_richiesto` (shutdown
 ## How it behaves
 - **State:** "off" only after 3 failed pings in a row. After OFF the switch stays **on** while the device still answers (usually 2–3 minutes): this is normal.
 - **Command lock:** after **ON** the switch ignores further commands until the ping confirms. After **OFF**, during the **first minute** an ON still cancels it; then it is locked. The lock lasts at most `lock_minutes`.
-- **The `.sol` file persists** across add-on and Home Assistant restarts. Beware: a device that powers on by itself (for example when the mains return) while its `.sol` exists **shuts down again**. Turn it on with the switch.
+- **The `.sol` file** survives add-on and Home Assistant restarts. When it is deleted depends on `force_shutdown` (section below).
 - **Clients not in the list** asking for `qnapups` or `ups` always read "online".
 - **No commands accepted:** `SET`, `INSTCMD`, `FSD` answer `ACCESS-DENIED`. FakeNUT never shuts anything down on its own: it only tells "on battery" to the device that must shut down.
+
+## Manual power-on and `force_shutdown`
+After an OFF, FakeNUT answers "on battery" as long as the `<name>.sol` file exists. If the device powers on without using the switch (power button, WOL from another app, power recovery), it reads "on battery" and **shuts down again**. `force_shutdown` chooses whether you want that.
+
+| | `force_shutdown: false` (default) | `force_shutdown: true` |
+|---|---|---|
+| When the `.sol` is deleted | as soon as the ping confirms the device is **off** (3 failed pings) | only by an **ON** from the switch |
+| You power it on with the button | it stays on; the switch goes back to ON by itself | it **shuts down again** after the delay set on the device |
+| To power it on from HA | switch ON (sends WOL) | switch ON (deletes the `.sol` and sends WOL) |
+| Good for | normal use: shut down from HA, power on as you like | devices that must stay off until Home Assistant decides |
+
+**With the real UPS** (`real_ups: true`) the `.sol` is deleted only when the UPS is **online** (`OL`). If it is **on battery**, or does not answer, the file stays even with `force_shutdown: false`: during a blackout the device is still powered by the battery, and powering it on would restart it. The file is deleted by itself once the UPS is back online.
+
+A powered-off device does **not** power on because its file was deleted: a device that is off does not query FakeNUT. Only WOL, the power button, or power recovery (when the power at its input goes away and comes back) turn it on.
+
+### Blackout with a real UPS: compared with a regular NUT
+With a regular NUT server, after the clients shut down the server sends the UPS a "kill power" command: the UPS turns its outlets off and back on when the mains return, so devices with power recovery restart. Without that command, if the mains return before the battery runs out, the devices stay off.
+
+FakeNUT does not use kill power: it powers devices on with **Wake-on-LAN**. A typical automation:
+- real UPS **on battery for 3 minutes** → `switch.turn_off` on the switches;
+- real UPS **online for 5 minutes** → `switch.turn_on` on the switches of the devices that are off.
+
+If the battery does run out, when the mains return the devices with power recovery restart by themselves; their `.sol` has already been deleted (UPS online), so they stay on.
 
 ## Real UPS (optional)
 With a UPS connected via USB to the Home Assistant machine: `real_ups: true`, `real_ups_driver` (usually `usbhid-ups`) and `real_ups_port` (`auto`). A standard NUT server starts on port **3494**; add it in HA with the **Network UPS Tools** integration. FakeNUT's clients do not see it: to shut them down in a blackout you need an automation, for example "on battery for 3 minutes → turn the switches off".
@@ -251,5 +301,5 @@ If a client is on another VLAN, the firewall must allow it to reach port 3493 on
 |---|---|
 | The device does not shut down | the NUT client is not enabled, or points to another IP; try `debug: true` and check the log |
 | It does not power on | Wake-on-LAN disabled on the device, wrong MAC, broadcast of another network, aggregated ports (LAG) |
-| It shuts down right after powering on | its `.sol` is still there: switch to ON |
+| It shuts down right after powering on | its `.sol` is still there: with `force_shutdown: true` this is intended (switch to ON); with `false`, the real UPS is on battery or not answering |
 | Login refused in the log | `custom` client with a user or password different from the list |

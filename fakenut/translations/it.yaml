@@ -11,6 +11,9 @@ configuration:
   lock_minutes:
     name: Durata del blocco
     description: Minuti massimi in cui l'interruttore ignora nuovi comandi dopo ON o OFF, in attesa della conferma del ping.
+  force_shutdown:
+    name: Spegnimento forzato
+    description: "Se attivo, un dispositivo spento da HA e riacceso a mano si rispegne: il file .sol resta fino all'ON dell'interruttore. Se spento (predefinito), il file si cancella appena il dispositivo risulta spento (con l'UPS vero, solo se è in rete)."
   real_ups:
     name: UPS vero in USB
     description: Avvia un server NUT standard sulla porta 3494 per un UPS collegato in USB (solo per l'integrazione NUT di HA).
