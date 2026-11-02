@@ -29,7 +29,7 @@ import urllib.request
 
 import paho.mqtt.client as mqtt
 
-VERSION = "2.4.1"
+VERSION = "2.4.2"
 OPTIONS_FILE = os.environ.get("NUT_CASA_OPTIONS", "/data/options.json")
 SOL_DIR = os.environ.get("NUT_CASA_SOL_DIR", "/share/nut")
 DEVICES_FILE = os.environ.get("NUT_CASA_DEVICES", "/data/devices.json")

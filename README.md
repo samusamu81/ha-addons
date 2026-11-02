@@ -12,4 +12,4 @@ Accendere e spegnere i NAS QNAP da Home Assistant, con un interruttore per NAS, 
 1. *Impostazioni → Componenti aggiuntivi → Negozio → ⋮ → Repository*: aggiungere `https://github.com/samusamu81/nut-casa`.
 2. Installare **NUT casa**, compilare l'elenco dei NAS nella scheda *Configurazione*, avviare.
 
-Documentazione completa: [nut_casa/DOCS.md](nut_casa/DOCS.md).
+Documentazione completa: [nut_casa/DOCS.md](nut_casa/DOCS.md). Licenza [MIT](LICENSE).

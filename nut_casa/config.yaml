@@ -1,5 +1,5 @@
 name: NUT casa
-version: "2.4.1"
+version: "2.4.2"
 slug: nut_casa
 url: https://github.com/samusamu81/nut-casa
 description: >-
@@ -9,6 +9,7 @@ description: >-
   vero in USB sulla porta 3494.
 arch:
   - aarch64
+  - amd64
 init: false
 startup: services
 boot: auto

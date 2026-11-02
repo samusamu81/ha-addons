@@ -35,4 +35,4 @@ Per ogni NAS: `switch.<nome>`, `binary_sensor.<nome>_in_corso`, `sensor.<nome>_u
 Ogni evento va nel **Registro** di HA (nome "NAS &lt;nome&gt;") e nel file `/share/nut/syslog/<nome>.log`, un file al giorno, tenuto `syslog_days` giorni. Gli accessi ai file ("conn log") vanno solo nel file.
 
 ## Requisiti
-Broker MQTT (add-on Mosquitto), integrazione MQTT. Provato su Raspberry Pi 5 (aarch64) con QTS 5.2.
+Broker MQTT (add-on Mosquitto), integrazione MQTT. Architetture: aarch64 (Raspberry Pi 4/5 e simili) e amd64 (PC, macchine virtuali). Provato su Raspberry Pi 5 con QTS 5.2.

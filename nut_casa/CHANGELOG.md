@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.4.2
+- Anche per amd64 (PC Intel/AMD, macchine virtuali).
+- Licenza MIT.
+
 ## 2.4.1
 - Comandi MQTT memorizzati (retain) ignorati e cancellati.
 
