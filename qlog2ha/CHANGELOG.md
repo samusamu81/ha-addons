@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.0
+- 🇮🇹 Riepilogo per NAS, `sensor.<nome>_stato_eventi`: il peggio dall'ultimo azzeramento (`ok`, `info`, `problemi`, `critico`), con i conteggi. Pulsante `button.<nome>_azzera_eventi`: azzera il riepilogo e cancella lo storico su file.
+- 🇬🇧 Per-NAS summary, `sensor.<name>_stato_eventi`: the worst event since the last reset (`ok`, `info`, `problemi`, `critico`), with counters. Button `button.<name>_azzera_eventi`: resets the summary and deletes the file history.
+
 ## 1.0.1
 - 🇮🇹 Nuovo logo. Documentazione e opzioni anche in inglese.
 - 🇬🇧 New logo. Documentation and options also in English.

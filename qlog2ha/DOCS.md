@@ -11,6 +11,7 @@ Gli **eventi dei NAS QNAP** in Home Assistant: errori dei dischi, snapshot, back
 NAS QNAP ── QuLog Center → Mittente log ── syslog (UDP/TCP 1514) ──► QLog2HA
                                                                       ├─► sensor.<nome>_ultimo_evento
                                                                       ├─► event.<nome>_evento (info / avviso / errore)
+                                                                      ├─► sensor.<nome>_stato_eventi (ok / info / problemi / critico)
                                                                       ├─► Registro di HA ("NAS <nome>")
                                                                       └─► /share/qlog2ha/<nome>.log
 ```
@@ -46,8 +47,28 @@ Per fare una prova: un evento qualsiasi, per esempio il test SMART rapido di un 
 |---|---|
 | `sensor.<nome>_ultimo_evento` | testo dell'ultimo evento. Negli attributi: `livello`, `severita`, `application`, `category`, `users`, `source_ip`, `ricevuto`, `raw`… |
 | `event.<nome>_evento` | scatta a ogni evento. Tipo `info`, `avviso` o `errore`, con gli stessi campi negli attributi |
+| `sensor.<nome>_stato_eventi` | il **peggio** arrivato dall'ultimo azzeramento: `ok`, `info`, `problemi` o `critico` (sezione sotto) |
+| `button.<nome>_azzera_eventi` | azzera il riepilogo e **cancella lo storico su file** di quel NAS |
 
 Il livello viene dalla priorità syslog: da emergenza a errore → `errore`; avviso → `avviso`; il resto → `info`.
+
+### Riepilogo e pulsante "Azzera eventi"
+`sensor.<nome>_stato_eventi` è una spia: ricorda l'evento **più grave** arrivato dall'ultimo azzeramento, così con un'occhiata sai se ci sono state solo informazioni, dei problemi o qualcosa di critico.
+
+| Stato | Vuol dire |
+|---|---|
+| `ok` | nessun evento dall'azzeramento |
+| `info` | solo informazioni (priorità syslog nota, info, debug) |
+| `problemi` | almeno un avviso |
+| `critico` | almeno un errore, critico, allarme o emergenza |
+
+Attributi: `info`, `problemi`, `critico` (quanti eventi per categoria), `dal` (data dell'ultimo azzeramento), `ultimo_problema` e `ultimo_critico` (ora e testo). Gli accessi ai file ("conn log") non contano. Il riepilogo sopravvive ai riavvii dell'add-on.
+
+Il pulsante **`button.<nome>_azzera_eventi`**:
+- riporta la spia a `ok` e i conteggi a zero;
+- **cancella lo storico su file** di quel NAS (svuota il file di oggi e cancella quelli dei giorni prima). Non si può annullare.
+
+Restano invece le righe già scritte nel **Registro di HA** e la cronologia delle entità: stanno nel database di Home Assistant e spariscono da sole dopo i giorni di conservazione del recorder.
 
 ### Esempio: notifica sul telefono per gli errori
 ```yaml
@@ -68,7 +89,7 @@ automation:
 
 ## Storico
 - **Registro di HA:** una riga per evento, con il nome "NAS &lt;nome&gt;". Resta quanto il recorder di HA (10 giorni, se non l'hai cambiato).
-- **File:** `/share/qlog2ha/<nome>.log` (cartella `share` di Home Assistant, anche via Samba), un file al giorno per `days` giorni. Ogni riga ha l'ora di ricezione (fuso di HA), il testo e il messaggio originale.
+- **File:** `/share/qlog2ha/<nome>.log` (cartella `share` di Home Assistant, anche via Samba), un file al giorno per `days` giorni. Ogni riga ha l'ora di ricezione (fuso di HA), il testo e il messaggio originale. Il pulsante *Azzera eventi* lo cancella.
 - **Accessi ai file** ("conn log"), se il NAS li manda: solo nel file, non nel sensore né nel Registro.
 
 ## Rete e sicurezza
@@ -120,6 +141,7 @@ QLog2HA fa la stessa cosa dentro un add-on, con in più:
 QNAP NAS ── QuLog Center → Log Sender ── syslog (UDP/TCP 1514) ──► QLog2HA
                                                                     ├─► sensor.<name>_ultimo_evento
                                                                     ├─► event.<name>_evento (info / avviso / errore)
+                                                                    ├─► sensor.<name>_stato_eventi (ok / info / problemi / critico)
                                                                     ├─► HA Logbook ("NAS <name>")
                                                                     └─► /share/qlog2ha/<name>.log
 ```
@@ -151,14 +173,34 @@ If you also use **FakeNUT**, give the NAS units **the same names** in both: in H
 To test: any event, for example a quick SMART test of a disk, should show up within seconds in `sensor.<name>_ultimo_evento`.
 
 ## Entities in Home Assistant
-Entity names are in Italian (`ultimo_evento` = last event, `evento` = event).
+Entity names are in Italian (`ultimo_evento` = last event, `evento` = event, `stato_eventi` = event status, `azzera_eventi` = reset events).
 
 | Entity | What it shows |
 |---|---|
 | `sensor.<name>_ultimo_evento` | text of the last event. Attributes: `livello` (level), `severita` (severity), `application`, `category`, `users`, `source_ip`, `ricevuto` (received), `raw`… |
 | `event.<name>_evento` | fires on every event. Type `info`, `avviso` (warning) or `errore` (error), with the same fields as attributes |
+| `sensor.<name>_stato_eventi` | the **worst** event since the last reset: `ok`, `info`, `problemi` (problems) or `critico` (critical) (section below) |
+| `button.<name>_azzera_eventi` | resets the summary and **deletes the file history** of that NAS |
 
 The level comes from the syslog priority: emergency to error → `errore`; warning → `avviso`; everything else → `info`.
+
+### Summary and "Azzera eventi" button
+`sensor.<name>_stato_eventi` is a warning light: it remembers the **most severe** event since the last reset, so at a glance you know whether there was only information, some problems, or something critical.
+
+| State | Meaning |
+|---|---|
+| `ok` | no events since the reset |
+| `info` | information only (syslog priority notice, info, debug) |
+| `problemi` | at least one warning |
+| `critico` | at least one error, critical, alert or emergency |
+
+Attributes: `info`, `problemi`, `critico` (event count per category), `dal` (date of the last reset), `ultimo_problema` and `ultimo_critico` (time and text of the last problem / critical event). File accesses ("conn log") are not counted. The summary survives add-on restarts.
+
+The **`button.<name>_azzera_eventi`** button:
+- sets the light back to `ok` and the counters to zero;
+- **deletes the file history** of that NAS (empties today's file and deletes the previous days). This cannot be undone.
+
+What stays: the lines already written to the **HA Logbook** and the entity history. They live in Home Assistant's database and go away by themselves after the recorder's retention days.
 
 ### Example: phone notification for errors
 ```yaml
@@ -179,7 +221,7 @@ automation:
 
 ## History
 - **HA Logbook:** one line per event, named "NAS &lt;name&gt;". Kept as long as HA's recorder keeps data (10 days unless you changed it).
-- **File:** `/share/qlog2ha/<name>.log` (Home Assistant's `share` folder, also via Samba), one file per day for `days` days. Each line has the time received (HA's time zone), the text and the original message.
+- **File:** `/share/qlog2ha/<name>.log` (Home Assistant's `share` folder, also via Samba), one file per day for `days` days. Each line has the time received (HA's time zone), the text and the original message. The *Azzera eventi* button deletes it.
 - **File accesses** ("conn log"), if the NAS sends them: only in the file, not in the sensor or the Logbook.
 
 ## Network and security

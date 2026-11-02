@@ -20,10 +20,11 @@ import urllib.request
 
 import paho.mqtt.client as mqtt
 
-VERSION = "1.0.1"
+VERSION = "1.1.0"
 OPTIONS_FILE = os.environ.get("QLOG2HA_OPTIONS", "/data/options.json")
 LOG_DIR = os.environ.get("QLOG2HA_DIR", "/share/qlog2ha")
 DEVICES_FILE = os.environ.get("QLOG2HA_DEVICES", "/data/devices.json")
+SUMMARY_FILE = os.environ.get("QLOG2HA_SUMMARY", "/data/riepilogo.json")
 TOPIC = "qlog2ha"
 
 OPTS = json.load(open(OPTIONS_FILE))
@@ -105,6 +106,71 @@ def within_rate(nas):
     return False
 
 
+# Riepilogo per NAS: il peggio arrivato dall'ultimo azzeramento (pulsante in HA),
+# con i conteggi. Salvato in SUMMARY_FILE, sopravvive ai riavvii.
+RANK = {"ok": 0, "info": 1, "problemi": 2, "critico": 3}
+summary_lock = threading.Lock()
+
+
+def new_summary():
+    return {"stato": "ok", "info": 0, "problemi": 0, "critico": 0,
+            "dal": time.strftime("%d/%m/%Y %H:%M:%S"), "ultimo_problema": None, "ultimo_critico": None}
+
+
+def load_summary():
+    try:
+        data = json.load(open(SUMMARY_FILE))
+    except (OSError, ValueError):
+        data = {}
+    return {n.name: data.get(n.name) or new_summary() for n in NAS}
+
+
+SUMMARY = load_summary()
+
+
+def save_summary():
+    tmp = SUMMARY_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(SUMMARY, f)
+    os.replace(tmp, SUMMARY_FILE)
+
+
+def category(ev):
+    """emergenza..errore -> critico, avviso -> problemi, il resto -> info."""
+    sev = SEVERITY.index(ev["severita"])
+    return "critico" if sev <= 3 else "problemi" if sev == 4 else "info"
+
+
+def count_event(nas, ev, text):
+    """Conta l'evento nel riepilogo. True = lo stato e' peggiorato."""
+    cat = category(ev)
+    with summary_lock:
+        s = SUMMARY[nas.name]
+        s[cat] += 1
+        if cat != "info":
+            s[f"ultimo_{'critico' if cat == 'critico' else 'problema'}"] = f"{ev['ricevuto']} {text}"[:255]
+        if RANK[cat] > RANK[s["stato"]]:
+            s["stato"] = cat
+            return True
+    return False
+
+
+def publish_summary(nas):
+    with summary_lock:
+        save_summary()
+        payload = json.dumps(SUMMARY[nas.name])
+    if client is not None:
+        client.publish(f"{TOPIC}/{nas.name}/riepilogo", payload, retain=True)
+
+
+def reset_summary(nas):
+    with summary_lock:
+        SUMMARY[nas.name] = new_summary()
+    publish_summary(nas)
+    history.put((nas, None, None, False))  # None = cancellare i file di storico (nel suo thread)
+    log(f"{nas.name}: riepilogo degli eventi azzerato")
+
+
 def on_syslog(line, peer):
     line = line.strip()
     if not line:
@@ -120,10 +186,16 @@ def on_syslog(line, peer):
     text = f"[{ev['livello']}] {where + ': ' if where else ''}{ev['content']}"
     # Accessi ai file ("conn log"): uno per file, migliaia al giorno. Solo nel file
     # dello storico, non in HA, dove coprirebbero gli eventi veri.
-    to_ha = ev.get("tipo_log") != "conn log" and within_rate(nas)
+    if ev.get("tipo_log") == "conn log":
+        history.put((nas, ev, text, False))
+        return
+    worse = count_event(nas, ev, text)
+    to_ha = within_rate(nas)
     if to_ha:
         log(f"{nas.name} {text}")
         publish_event(nas, ev)
+    if to_ha or worse:  # oltre il tetto si conta lo stesso, ma si pubblica solo se peggiora
+        publish_summary(nas)
     history.put((nas, ev, text, to_ha))
 
 
@@ -131,6 +203,24 @@ def on_syslog(line, peer):
 # <LOG_DIR>/<nome>.log, tenuto DAYS giorni. In un thread a parte: le chiamate
 # HTTP non devono fermare la ricezione.
 history = queue.Queue()
+
+
+def clear_history(nas, handler):
+    """Pulsante "Azzera eventi": svuota il file di oggi e cancella quelli dei giorni prima.
+    Il Registro di HA resta (sta nel database di HA)."""
+    base = os.path.join(LOG_DIR, f"{nas.name}.log")
+    handler.acquire()
+    try:
+        handler.stream.seek(0)
+        handler.stream.truncate()
+    finally:
+        handler.release()
+    removed = 0
+    for f in os.listdir(LOG_DIR):
+        if f.startswith(f"{nas.name}.log."):
+            os.remove(os.path.join(LOG_DIR, f))
+            removed += 1
+    log(f"{nas.name}: storico cancellato ({base} svuotato, {removed} file vecchi tolti)")
 
 
 def history_loop():
@@ -146,6 +236,9 @@ def history_loop():
         files[nas.name].setLevel(logging.INFO)
     while True:
         nas, ev, text, to_ha = history.get()
+        if ev is None:
+            clear_history(nas, files[nas.name].handlers[0])
+            continue
         files[nas.name].info(f"{text} | {ev['raw']}")
         token = supervisor_token()
         if not to_ha or not token:
@@ -238,11 +331,42 @@ def discovery_event(nas):
     })
 
 
+def discovery_summary(nas):
+    # Il peggio dall'ultimo azzeramento: ok / info / problemi / critico.
+    return json.dumps({
+        "name": "Stato eventi",
+        "unique_id": f"qlog2ha_{nas.name}_stato_eventi",
+        "state_topic": f"{TOPIC}/{nas.name}/riepilogo",
+        "value_template": "{{ value_json.stato }}",
+        "json_attributes_topic": f"{TOPIC}/{nas.name}/riepilogo",
+        "availability_topic": f"{TOPIC}/status",
+        "device_class": "enum",
+        "options": list(RANK),
+        "icon": "mdi:list-status",
+        "device": device(nas),
+    })
+
+
+def discovery_reset(nas):
+    return json.dumps({
+        "name": "Azzera eventi",
+        "unique_id": f"qlog2ha_{nas.name}_azzera",
+        "command_topic": f"{TOPIC}/{nas.name}/azzera",
+        "availability_topic": f"{TOPIC}/status",
+        "icon": "mdi:broom",
+        "device": device(nas),
+    })
+
+
 def publish_event(nas, ev):
     if client is None:
         return
     client.publish(f"{TOPIC}/{nas.name}/ultimo", json.dumps(ev), retain=True)
     client.publish(f"{TOPIC}/{nas.name}/evento", json.dumps({"event_type": ev["livello"], **ev}))
+
+
+ENTITIES = (("sensor", "ultimo_evento", discovery_sensor), ("event", "evento", discovery_event),
+            ("sensor", "stato_eventi", discovery_summary), ("button", "azzera", discovery_reset))
 
 
 def remove_old():
@@ -252,9 +376,10 @@ def remove_old():
     except (OSError, ValueError):
         old = set()
     for name in old - set(BY_NAME):
-        client.publish(f"homeassistant/sensor/qlog2ha_{name}_ultimo_evento/config", "", retain=True)
-        client.publish(f"homeassistant/event/qlog2ha_{name}_evento/config", "", retain=True)
-        client.publish(f"{TOPIC}/{name}/ultimo", "", retain=True)
+        for kind, suffix, _ in ENTITIES:
+            client.publish(f"homeassistant/{kind}/qlog2ha_{name}_{suffix}/config", "", retain=True)
+        for t in ("ultimo", "riepilogo"):
+            client.publish(f"{TOPIC}/{name}/{t}", "", retain=True)
         log(f"{name}: tolto dall'elenco, entita' rimosse")
     with open(DEVICES_FILE, "w") as f:
         json.dump(sorted(BY_NAME), f)
@@ -262,11 +387,11 @@ def remove_old():
 
 def announce():
     for nas in NAS:
-        client.publish(f"homeassistant/sensor/qlog2ha_{nas.name}_ultimo_evento/config",
-                       discovery_sensor(nas), retain=True)
-        client.publish(f"homeassistant/event/qlog2ha_{nas.name}_evento/config",
-                       discovery_event(nas), retain=True)
+        for kind, suffix, discovery in ENTITIES:
+            client.publish(f"homeassistant/{kind}/qlog2ha_{nas.name}_{suffix}/config", discovery(nas), retain=True)
     client.publish(f"{TOPIC}/status", "online", retain=True)
+    for nas in NAS:
+        publish_summary(nas)
 
 
 def on_connect(c, userdata, flags, rc, *rest):
@@ -275,13 +400,25 @@ def on_connect(c, userdata, flags, rc, *rest):
         return
     log("MQTT connesso")
     c.subscribe("homeassistant/status")
+    c.subscribe(f"{TOPIC}/+/azzera")
     remove_old()
     announce()
 
 
 def on_message(c, userdata, msg):
-    if msg.topic == "homeassistant/status" and msg.payload.decode(errors="replace").strip() == "online":
-        announce()  # HA riavviato: ripubblicare
+    payload = msg.payload.decode(errors="replace").strip()
+    if msg.topic == "homeassistant/status":
+        if payload == "online":
+            announce()  # HA riavviato: ripubblicare
+        return
+    if msg.topic.endswith("/azzera"):
+        if msg.retain:  # comando rimasto nel broker: non deve azzerare a ogni riavvio
+            if payload:
+                c.publish(msg.topic, "", retain=True)
+            return
+        nas = BY_NAME.get(msg.topic.split("/")[1])
+        if nas is not None:
+            reset_summary(nas)
 
 
 def container_env(name):
