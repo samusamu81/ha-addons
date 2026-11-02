@@ -1,12 +1,13 @@
 name: FakeNUT
-version: "3.0.0"
+version: "3.0.1"
 slug: fakenut
 url: https://github.com/samusamu81/ha-addons/tree/main/fakenut
 description: >-
   Finto server NUT che risponde a ogni client in base al suo IP: un
   interruttore in Home Assistant per ogni dispositivo (QNAP, Synology o
   qualsiasi client NUT) per spegnerlo in modo pulito e riaccenderlo col
-  Wake-on-LAN.
+  Wake-on-LAN. / Fake NUT server answering each client by IP: one switch
+  per device for clean shutdown and Wake-on-LAN.
 arch:
   - aarch64
   - amd64

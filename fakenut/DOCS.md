@@ -1,8 +1,8 @@
 # FakeNUT
 
+🇮🇹 Italiano (sotto) · 🇬🇧 [English below](#fakenut-english)
+
 > **Avvertenza — solo per uso privato.** Questo software è pubblicato così com'è, per uso personale. Non c'è nessuna garanzia, esplicita o implicita, di funzionamento, prestazioni o idoneità a uno scopo; chi lo usa lo fa a proprio rischio. In particolare FakeNUT può spegnere dispositivi: provalo prima di affidargli qualcosa di importante. Vedi la [licenza MIT](https://github.com/samusamu81/ha-addons/blob/main/LICENSE).
->
-> *Disclaimer — for private use only. Provided "as is", without any express or implied warranty of operation, performance or fitness for a particular purpose. Use at your own risk.*
 
 Un **finto server NUT** che risponde a ogni client in base al suo indirizzo IP, e un **interruttore in Home Assistant** per ogni dispositivo: lo spegni in modo pulito, lo riaccendi col Wake-on-LAN, e vedi se è acceso.
 
@@ -125,3 +125,131 @@ Se un client è in un'altra VLAN, il firewall deve permettergli la 3493 verso Ho
 | Non si riaccende | Wake-on-LAN spento sul dispositivo, MAC sbagliato, broadcast di un'altra rete, porte aggregate (LAG) |
 | Si rispegne appena acceso | c'è ancora il suo `.sol`: interruttore su ON |
 | Login rifiutato nel registro | client `custom` con utente o password diversi dall'elenco |
+
+---
+
+# FakeNUT (English)
+
+> **Disclaimer — for private use only.** This software is provided "as is", for personal use. There is no warranty of any kind, express or implied, of operation, performance or fitness for a particular purpose; use it at your own risk. FakeNUT can shut devices down: test it before trusting it with anything important. See the [MIT license](https://github.com/samusamu81/ha-addons/blob/main/LICENSE).
+
+A **fake NUT server** that answers each client according to its IP address, plus a **Home Assistant switch** for each device: shut it down cleanly, turn it back on with Wake-on-LAN, and see whether it is on.
+
+## What it is for
+Many NAS units and servers can shut themselves down when the UPS goes on battery: they ask a **NUT** (Network UPS Tools) server for the UPS status and, when it reads "on battery, low", they shut down cleanly.
+
+FakeNUT uses this mechanism. It pretends to be a UPS, and Home Assistant decides the answer **device by device**:
+
+```
+switch.nas2 OFF ──► FakeNUT creates /share/fakenut/nas2.sol
+                          │
+nas2 asks the status ─────┴──► "on battery, low" (only to nas2) ──► nas2 shuts down
+nas1 asks the status ─────────► "online"                         ──► nas1 stays on
+
+switch.nas2 ON  ──► deletes nas2.sol ──► Wake-on-LAN to nas2's MAC ──► it powers on
+ping every 10 s ──► switch state (on = answers the ping)
+```
+
+Typical uses:
+- shut down a backup NAS when it is done, and power it on when needed;
+- during a blackout, shut everything down one by one, with an automation tied to a real UPS;
+- power everything back on when the mains return.
+
+## Before you start
+- **MQTT broker**: the *Mosquitto broker* add-on with the *MQTT* integration. FakeNUT gets the credentials by itself.
+- A device that can act as a **NUT client** ("network UPS slave"): QNAP, Synology, TrueNAS, Unraid, Proxmox, Linux with `upsmon`, WinNUT…
+- To power on remotely: **Wake-on-LAN** enabled on the device, and its **MAC**. The packet is a broadcast, so the device must be on the network (VLAN) given in `broadcast`.
+
+## Configuration
+The add-on's *Configuration* tab:
+
+```yaml
+devices:
+  - name: nas1                 # lowercase, digits and _ : becomes switch.nas1
+    ip: 192.168.1.10
+    mac: "aa:bb:cc:dd:ee:ff"   # optional: without it, no Wake-on-LAN
+    type: qnap                 # qnap | synology | custom
+  - name: server
+    ip: 192.168.1.20
+    mac: "aa:bb:cc:dd:ee:00"
+    type: custom
+    user: monuser              # custom only: the client must use these
+    password: a-password
+broadcast: 192.168.1.255       # broadcast address of the devices' network (Wake-on-LAN)
+ping_interval: 10              # seconds between pings
+lock_minutes: 5                # maximum lock time after a command
+real_ups: false                # real UPS on USB (see below)
+```
+
+| Option | Meaning |
+|---|---|
+| `name` | name of the switch and of the device in HA. Unique |
+| `ip` | fixed IP of the device: this is how FakeNUT recognizes it. Unique |
+| `mac` | for Wake-on-LAN. Empty = the switch shuts down but cannot power on |
+| `type` | which kind of NUT client it is (table below) |
+| `user`, `password` | `custom` only: if set, FakeNUT checks them at login |
+| `broadcast` | broadcast address of the devices' network |
+| `ping_interval` | how often to check whether devices are on |
+| `lock_minutes` | after a command, the longest time the switch stays locked |
+| `debug` | (optional) logs every NUT request, with the IP |
+
+### Client types
+| `type` | UPS name | User | Password | Notes |
+|---|---|---|---|---|
+| `qnap` | `qnapups` | `admin` | `123456` | fixed in QTS, cannot be changed |
+| `synology` | `ups` | `monuser` | `secret` | fixed in DSM, cannot be changed |
+| `custom` | any | `user` | `password` | you choose them and set the same in the client |
+
+FakeNUT answers **any UPS name** according to the client's IP, so the name configured in the client does not matter. For `qnap` and `synology`, user and password are the fixed ones of the system.
+
+## On the device
+- **QNAP (QTS):** *Control Panel → System → External Device → UPS*: **Network UPS slave**, server IP = Home Assistant's IP. Also set how long to wait before shutting down once "on battery".
+- **Synology (DSM):** *Control Panel → Hardware & Power → UPS*: enable, type **Synology UPS server**, server IP = Home Assistant's IP.
+- **Others (custom):** in the NUT client (`upsmon.conf` or equivalent UI): server = Home Assistant's IP, port `3493`, any UPS name, and the same `user`/`password` as in the list.
+
+## Entities in Home Assistant
+For each device (via MQTT discovery):
+
+| Entity | What it shows |
+|---|---|
+| `switch.<name>` | on when the device answers the ping. OFF = shut down, ON = power on |
+| `binary_sensor.<name>_in_corso` | on while a command waits for the ping to confirm it ("in corso" = in progress) |
+
+Switch attributes: `ip`, `mac`, `tipo` (type), `spegnimento_richiesto` (shutdown requested: the `.sol` file exists), `comando_in_corso` (command in progress), `bloccato` (locked).
+
+## How it behaves
+- **State:** "off" only after 3 failed pings in a row. After OFF the switch stays **on** while the device still answers (usually 2–3 minutes): this is normal.
+- **Command lock:** after **ON** the switch ignores further commands until the ping confirms. After **OFF**, during the **first minute** an ON still cancels it; then it is locked. The lock lasts at most `lock_minutes`.
+- **The `.sol` file persists** across add-on and Home Assistant restarts. Beware: a device that powers on by itself (for example when the mains return) while its `.sol` exists **shuts down again**. Turn it on with the switch.
+- **Clients not in the list** asking for `qnapups` or `ups` always read "online".
+- **No commands accepted:** `SET`, `INSTCMD`, `FSD` answer `ACCESS-DENIED`. FakeNUT never shuts anything down on its own: it only tells "on battery" to the device that must shut down.
+
+## Real UPS (optional)
+With a UPS connected via USB to the Home Assistant machine: `real_ups: true`, `real_ups_driver` (usually `usbhid-ups`) and `real_ups_port` (`auto`). A standard NUT server starts on port **3494**; add it in HA with the **Network UPS Tools** integration. FakeNUT's clients do not see it: to shut them down in a blackout you need an automation, for example "on battery for 3 minutes → turn the switches off".
+
+## Network and security
+### Ports
+| Port | Protocol | Used by | Direction |
+|---|---|---|---|
+| **3493** | TCP | the NUT clients in the list | devices → Home Assistant |
+| 3494 | TCP | HA's NUT integration, only with `real_ups: true` | HA → add-on |
+| 9 | UDP broadcast | Wake-on-LAN | Home Assistant → devices' network |
+| 1883 | TCP | MQTT (local broker) | inside Home Assistant |
+
+The add-on uses the **host network**: it must see the clients' real IP and send the Wake-on-LAN broadcast. So port 3493 is open on all of Home Assistant's interfaces. **Never expose it to the internet** (no port forwarding on the router).
+
+If a client is on another VLAN, the firewall must allow it to reach port 3493 on Home Assistant, ideally only from that IP.
+
+### What a "malicious" client can do
+- **Give commands:** nothing. FakeNUT accepts no commands (`SET`, `INSTCMD`, `FSD` → `ACCESS-DENIED`) and never shuts anything down by itself. The switches are controlled only from Home Assistant, via MQTT.
+- **Read:** anyone on the network can ask for the status. Whoever uses the IP of a listed device reads that device's status ("online" or "on battery"): not very sensitive information. FakeNUT recognizes devices **by IP only**.
+- **Deceive a device:** someone who takes Home Assistant's place on the network (same IP, ARP spoofing) can make a NAS believe the UPS is low and shut it down. This is a limit of NUT itself, which encrypts nothing: it applies to any plain-text NUT server.
+- **Flood it with requests:** limited. At most **10 connections per IP** and **100 in total**; a connection idle for 5 minutes is closed; lines longer than 64 KB are dropped. Beyond the limits connections are refused, and the log shows "troppe connessioni" (too many connections). A heavy attack from inside the network can still slow the add-on down, like any service: that is why FakeNUT must stay on the home network only.
+- **User and password:** checked at login for `custom` clients, but sent in plain text (NUT without TLS). For `qnap` and `synology` they are the fixed, public firmware values, so they protect nothing.
+
+## Troubleshooting
+| Symptom | Likely cause |
+|---|---|
+| The device does not shut down | the NUT client is not enabled, or points to another IP; try `debug: true` and check the log |
+| It does not power on | Wake-on-LAN disabled on the device, wrong MAC, broadcast of another network, aggregated ports (LAG) |
+| It shuts down right after powering on | its `.sol` is still there: switch to ON |
+| Login refused in the log | `custom` client with a user or password different from the list |

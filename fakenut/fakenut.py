@@ -22,7 +22,7 @@ import urllib.request
 
 import paho.mqtt.client as mqtt
 
-VERSION = "3.0.0"
+VERSION = "3.0.1"
 OPTIONS_FILE = os.environ.get("FAKENUT_OPTIONS", "/data/options.json")
 SOL_DIR = os.environ.get("FAKENUT_SOL_DIR", "/share/fakenut")
 DEVICES_FILE = os.environ.get("FAKENUT_DEVICES", "/data/devices.json")

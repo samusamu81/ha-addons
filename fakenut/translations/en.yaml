@@ -1,0 +1,25 @@
+configuration:
+  devices:
+    name: Devices
+    description: "One entry per device: name (lowercase, becomes switch.<name>), fixed IP, MAC for Wake-on-LAN (optional), type (qnap, synology, custom) and, for custom only, user and password."
+  broadcast:
+    name: Broadcast address
+    description: Broadcast address of the devices' network, used for Wake-on-LAN (e.g. 192.168.1.255).
+  ping_interval:
+    name: Ping interval
+    description: Seconds between two pings of each device.
+  lock_minutes:
+    name: Lock time
+    description: Maximum minutes the switch ignores new commands after ON or OFF, waiting for the ping to confirm.
+  real_ups:
+    name: Real UPS on USB
+    description: Starts a standard NUT server on port 3494 for a UPS connected via USB (for HA's NUT integration only).
+  real_ups_driver:
+    name: Real UPS driver
+    description: NUT driver of the real UPS, usually usbhid-ups.
+  real_ups_port:
+    name: Real UPS port
+    description: Port of the real UPS, usually auto.
+  debug:
+    name: Debug
+    description: Log every NUT request with the client IP.

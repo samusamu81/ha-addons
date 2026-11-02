@@ -20,7 +20,7 @@ import urllib.request
 
 import paho.mqtt.client as mqtt
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 OPTIONS_FILE = os.environ.get("QLOG2HA_OPTIONS", "/data/options.json")
 LOG_DIR = os.environ.get("QLOG2HA_DIR", "/share/qlog2ha")
 DEVICES_FILE = os.environ.get("QLOG2HA_DEVICES", "/data/devices.json")

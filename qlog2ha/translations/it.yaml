@@ -1,0 +1,10 @@
+configuration:
+  devices:
+    name: NAS
+    description: "Una voce per NAS QNAP: nome (minuscolo, diventa sensor.<nome>_ultimo_evento; usa gli stessi nomi di FakeNUT) e IP fisso."
+  port:
+    name: Porta syslog
+    description: Porta su cui i NAS mandano il syslog (UDP e TCP).
+  days:
+    name: Giorni di storico
+    description: Quanti giorni di storico tenere in /share/qlog2ha/.
