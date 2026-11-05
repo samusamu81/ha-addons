@@ -64,3 +64,6 @@ The documentation is in Italian first, then English. Entity and attribute names 
 
 ### License
 [MIT](LICENSE).
+
+---
+#ha-addons
