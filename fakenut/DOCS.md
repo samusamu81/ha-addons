@@ -303,3 +303,6 @@ If a client is on another VLAN, the firewall must allow it to reach port 3493 on
 | It does not power on | Wake-on-LAN disabled on the device, wrong MAC, broadcast of another network, aggregated ports (LAG) |
 | It shuts down right after powering on | its `.sol` is still there: with `force_shutdown: true` this is intended (switch to ON); with `false`, the real UPS is on battery or not answering |
 | Login refused in the log | `custom` client with a user or password different from the list |
+
+---
+[Changelog](CHANGELOG.md) · #ha-addons

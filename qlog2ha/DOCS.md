@@ -259,3 +259,6 @@ QLog2HA does the same inside an add-on, plus:
 | Nothing arrives | Log Sender not enabled, wrong IP or port, "Send to QuLog Center" instead of "Syslog server" |
 | Log shows "syslog da … ignorato" (ignored) | the NAS's IP is not in the list (or the NAS sends from another network card) |
 | Thousands of access lines | the Connection log is enabled in the Log Sender |
+
+---
+[Changelog](CHANGELOG.md) · #ha-addons
